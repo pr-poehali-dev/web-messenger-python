@@ -1,18 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/ui/dialog';
 import Icon from '@/components/ui/icon';
 
 interface Message {
   id: string;
-  text: string;
+  text?: string;
   sender: string;
   time: string;
   isOwn: boolean;
+  type: 'text' | 'image' | 'file';
+  fileUrl?: string;
+  fileName?: string;
+  fileSize?: string;
 }
 
 interface Chat {
@@ -30,10 +35,12 @@ const Index = () => {
   const [selectedChat, setSelectedChat] = useState<string>('1');
   const [newMessage, setNewMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([
-    { id: '1', text: 'Привет! Как дела?', sender: 'Алексей', time: '14:30', isOwn: false },
-    { id: '2', text: 'Отлично! А у тебя как?', sender: 'Вы', time: '14:32', isOwn: true },
-    { id: '3', text: 'Тоже хорошо! Планы на выходные есть?', sender: 'Алексей', time: '14:35', isOwn: false },
-    { id: '4', text: 'Да, думаю в кино сходить', sender: 'Вы', time: '14:37', isOwn: true },
+    { id: '1', text: 'Привет! Как дела?', sender: 'Алексей', time: '14:30', isOwn: false, type: 'text' },
+    { id: '2', text: 'Отлично! А у тебя как?', sender: 'Вы', time: '14:32', isOwn: true, type: 'text' },
+    { id: '3', type: 'image', fileUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400', sender: 'Алексей', time: '14:34', isOwn: false },
+    { id: '4', text: 'Тоже хорошо! Планы на выходные есть?', sender: 'Алексей', time: '14:35', isOwn: false, type: 'text' },
+    { id: '5', text: 'Да, думаю в кино сходить', sender: 'Вы', time: '14:37', isOwn: true, type: 'text' },
+    { id: '6', type: 'file', fileName: 'презентация.pdf', fileSize: '2.4 MB', sender: 'Вы', time: '14:38', isOwn: true },
   ]);
 
   const [chats] = useState<Chat[]>([
@@ -79,6 +86,9 @@ const Index = () => {
     },
   ]);
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+
   const sendMessage = () => {
     if (newMessage.trim()) {
       const message: Message = {
@@ -86,11 +96,88 @@ const Index = () => {
         text: newMessage,
         sender: 'Вы',
         time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
-        isOwn: true
+        isOwn: true,
+        type: 'text'
       };
       setMessages([...messages, message]);
       setNewMessage('');
     }
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const imageUrl = URL.createObjectURL(file);
+      const message: Message = {
+        id: Date.now().toString(),
+        type: 'image',
+        fileUrl: imageUrl,
+        sender: 'Вы',
+        time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+        isOwn: true
+      };
+      setMessages([...messages, message]);
+    }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const message: Message = {
+        id: Date.now().toString(),
+        type: 'file',
+        fileName: file.name,
+        fileSize: (file.size / (1024 * 1024)).toFixed(1) + ' MB',
+        sender: 'Вы',
+        time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
+        isOwn: true
+      };
+      setMessages([...messages, message]);
+    }
+  };
+
+  const renderMessage = (message: Message) => {
+    if (message.type === 'image') {
+      return (
+        <Dialog>
+          <DialogTrigger asChild>
+            <div className="cursor-pointer">
+              <img 
+                src={message.fileUrl} 
+                alt="Изображение" 
+                className="max-w-[200px] max-h-[200px] rounded-lg object-cover hover:opacity-90 transition-opacity"
+              />
+            </div>
+          </DialogTrigger>
+          <DialogContent className="max-w-3xl">
+            <img 
+              src={message.fileUrl} 
+              alt="Изображение" 
+              className="w-full h-auto rounded-lg"
+            />
+          </DialogContent>
+        </Dialog>
+      );
+    }
+    
+    if (message.type === 'file') {
+      return (
+        <div className="flex items-center space-x-3 p-3 bg-slate-50 rounded-lg border">
+          <div className="p-2 bg-primary/10 rounded-lg">
+            <Icon name="FileText" size={20} className="text-primary" />
+          </div>
+          <div className="flex-1">
+            <p className="font-medium text-sm">{message.fileName}</p>
+            <p className="text-xs text-slate-500">{message.fileSize}</p>
+          </div>
+          <Button variant="ghost" size="icon">
+            <Icon name="Download" size={16} />
+          </Button>
+        </div>
+      );
+    }
+    
+    return <p className="text-sm">{message.text}</p>;
   };
 
   const selectedChatData = chats.find(chat => chat.id === selectedChat);
@@ -208,16 +295,24 @@ const Index = () => {
                 className={`flex ${message.isOwn ? 'justify-end' : 'justify-start'}`}
               >
                 <div 
-                  className={`max-w-xs lg:max-w-md px-4 py-2 rounded-2xl ${
+                  className={`max-w-xs lg:max-w-md rounded-2xl shadow-sm ${
+                    message.type === 'image' 
+                      ? 'p-1' 
+                      : message.type === 'file'
+                      ? 'p-2'
+                      : 'px-4 py-2'
+                  } ${
                     message.isOwn 
-                      ? 'bg-gradient-to-r from-primary to-secondary text-white' 
+                      ? message.type === 'text'
+                        ? 'bg-gradient-to-r from-primary to-secondary text-white'
+                        : 'bg-white border border-slate-200'
                       : 'bg-white border border-slate-200 text-slate-900'
-                  } shadow-sm`}
+                  }`}
                 >
-                  <p className="text-sm">{message.text}</p>
+                  {renderMessage(message)}
                   <p className={`text-xs mt-1 ${
-                    message.isOwn ? 'text-white/70' : 'text-slate-500'
-                  }`}>
+                    message.isOwn && message.type === 'text' ? 'text-white/70' : 'text-slate-500'
+                  } ${message.type !== 'text' ? 'px-2 pb-1' : ''}`}>
                     {message.time}
                   </p>
                 </div>
@@ -229,16 +324,36 @@ const Index = () => {
         {/* Message input */}
         <div className="bg-white border-t border-slate-200 p-4">
           <div className="flex items-center space-x-3">
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <Icon name="Paperclip" size={20} />
-            </Button>
+            <div className="flex space-x-1">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="rounded-full"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Icon name="Paperclip" size={20} />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="rounded-full"
+                onClick={() => imageInputRef.current?.click()}
+              >
+                <Icon name="Image" size={20} />
+              </Button>
+            </div>
             <div className="flex-1 relative">
               <Input 
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 placeholder="Введите сообщение..."
                 className="rounded-full border-slate-200 focus:border-primary pr-12"
-                onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
               />
               <Button 
                 variant="ghost" 
@@ -256,6 +371,22 @@ const Index = () => {
               <Icon name="Send" size={18} />
             </Button>
           </div>
+          
+          {/* Hidden file inputs */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileUpload}
+            className="hidden"
+            accept=".pdf,.doc,.docx,.txt,.zip,.rar"
+          />
+          <input
+            type="file"
+            ref={imageInputRef}
+            onChange={handleImageUpload}
+            className="hidden"
+            accept="image/*"
+          />
         </div>
       </div>
     </div>
